@@ -47,7 +47,7 @@ class FeedbackForm(discord.ui.Modal, title='Feedback Form'):
 
     async def on_submit(self, interaction: discord.Interaction):
         # Get the feedback channel
-        feedback_data = AsyncDataHandler('../feedback.json')
+        feedback_data = AsyncDataHandler('../data/feedback.json')
         feedback_channel = interaction.guild.get_channel(forum_channel_id)
         role = discord.utils.get(interaction.guild.roles, id=signatory_role_id)
 
@@ -110,7 +110,7 @@ async def on_raw_reaction_add(reaction: discord.RawReactionActionEvent):
 
 
 async def approved_or_reject(message, reaction, guild):
-    feedback_data = AsyncDataHandler('../feedback.json')
+    feedback_data = AsyncDataHandler('../data/feedback.json')
 
     already_signed = await feedback_data.get_signatories(discord_message_id=message.id)
     if already_signed is not False and str(reaction.member.id) in already_signed:
