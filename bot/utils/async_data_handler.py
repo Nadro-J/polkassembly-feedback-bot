@@ -43,12 +43,12 @@ class AsyncDataHandler:
     async def update(self, discord_message_id, **kwargs):
         data = await self._read_json()
 
-        if discord_message_id in data:
+        if str(discord_message_id) in data:
             for key, value in kwargs.items():
-                if key in data[discord_message_id]:
-                    data[discord_message_id][key] = value
+                if key in data[str(discord_message_id)]:
+                    data[str(discord_message_id)][key] = value
             # Update updated_on to current time on any update
-            data[discord_message_id]["updated_on"] = datetime.utcnow().isoformat()
+            data[str(discord_message_id)]["updated_on"] = datetime.utcnow().isoformat()
 
         await self._write_json(data)
 
@@ -68,12 +68,19 @@ class AsyncDataHandler:
 
         await self._write_json(data)
 
+    async def get_total_approved_or_rejected(self, discord_message_id, vote_type):
+        data = await self._read_json()
+        if str(discord_message_id) in list(data.keys()):
+            return int(data[str(discord_message_id)][vote_type])
+        else:
+            return False
+
     async def get_signatories(self, discord_message_id):
         data = await self._read_json()
 
-        if str(discord_message_id) in data \
-                and "signatories" in data[str(discord_message_id)] \
-                and data[str(discord_message_id)]["signatories"]:
-            return list(data[str(discord_message_id)]["signatories"][0].keys())
+        if str(discord_message_id) in list(data.keys()):
+            signatories = data[str(discord_message_id)]["signatories"]
+            signatory_keys = [list(signatory.keys())[0] for signatory in signatories]
+            return signatory_keys
         else:
             return False
