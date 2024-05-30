@@ -62,7 +62,7 @@ class FeedbackForm(discord.ui.Modal, title='Feedback Form'):
             embed.add_field(name=approval_emoji, value=0, inline=True)
             embed.add_field(name=reject_emoji, value=0, inline=True)
             embed.add_field(name="signatories", value="", inline=False)
-            embed.set_footer(text=f"{signatory_threshold} reaction is required to either approve or reject the request")
+            embed.set_footer(text=f"{signatory_threshold} reactions are required to either approve or reject the request")
 
             feedback_message = await interaction.channel.send(content=role.mention, file=thumbnail, embed=embed)
 
@@ -95,11 +95,6 @@ async def post_feedback_error(interaction: discord.Interaction, error):
 
 
 @client.event
-async def on_raw_reaction_remove(reaction: discord.RawReactionActionEvent):
-    print(reaction)
-
-
-@client.event
 async def on_raw_reaction_add(reaction: discord.RawReactionActionEvent):
     active_threads = [thread.id for thread in client.get_channel(forum_channel_id).threads]
 
@@ -121,29 +116,42 @@ async def approved_or_reject(message, reaction, guild):
     if already_signed is not False and str(reaction.member.id) in already_signed:
         return
 
+
+    total_approved = await feedback_data.get_total_approved_or_rejected(discord_message_id=message.id,
+                                                                        vote_type="approved")
+    total_rejected = await feedback_data.get_total_approved_or_rejected(discord_message_id=message.id,
+                                                                        vote_type="rejected")
+
     if str(reaction.emoji) == approval_emoji:
         role = discord.utils.get(guild.roles, id=signatory_role_id)
-        user = reaction.member.mention
+        user = reaction.member.display_name
 
         if "Rejected" in message.embeds[0].title or "Approved" in message.embeds[0].title:
             return
 
         if role in guild.get_member(reaction.member.id).roles and "Feedback" in message.embeds[0].title:
             approval_reaction = discord.utils.get(message.reactions, emoji=approval_emoji)
-            approval_count = approval_reaction.count
 
-            if approval_reaction and approval_reaction.count >= signatory_threshold:
+            if approval_reaction and total_approved >= signatory_threshold:
                 # Define the action to be taken when the reaction threshold is met
                 message.embeds[0].title = "Feedback Submitted (Approved)"
                 message.embeds[0].set_thumbnail(url='attachment://polkassembly.png')
-                message.embeds[0].set_field_at(index=0, name=approval_emoji, value=approval_count - 1)
+                message.embeds[0].set_field_at(index=0, name=approval_emoji, value=total_approved + 1)
+
+                new_value = message.embeds[0].fields[2].value + "\n" + user + " " + approval_emoji
+                message.embeds[0].set_field_at(index=2, name='signatories', value=new_value, inline=False)
+                await message.edit(embed=message.embeds[0])
+                await feedback_data.add_signatory(discord_message_id=message.id, user_id=reaction.member.id,
+                                                  username=reaction.member.name, decision=approval_emoji)
+
                 await message.edit(embed=message.embeds[0])
                 await message.channel.send(
                     f"The message has reached the threshold of {signatory_threshold} {approval_emoji} reactions!")
-                await feedback_data.update(discord_message_id=message.id, status='approved')  # in-progress
+                await feedback_data.update(discord_message_id=message.id, status='approved')
             else:
+                await feedback_data.update(discord_message_id=message.id, approved=total_approved + 1)
                 message.embeds[0].set_thumbnail(url='attachment://polkassembly.png')
-                message.embeds[0].set_field_at(index=0, name=approval_emoji, value=approval_count - 1)
+                message.embeds[0].set_field_at(index=0, name=approval_emoji, value=total_approved + 1)
 
                 new_value = message.embeds[0].fields[2].value + "\n" + user + " " + approval_emoji
                 message.embeds[0].set_field_at(index=2, name='signatories', value=new_value, inline=False)
@@ -153,28 +161,36 @@ async def approved_or_reject(message, reaction, guild):
 
     if str(reaction.emoji) == reject_emoji:
         role = discord.utils.get(guild.roles, id=signatory_role_id)
-        user = reaction.member.mention
+        user = reaction.member.display_name
 
         if "Rejected" in message.embeds[0].title or "Approved" in message.embeds[0].title:
             return
 
         if role in guild.get_member(reaction.member.id).roles and "Feedback" in message.embeds[0].title:
             rejection_reaction = discord.utils.get(message.reactions, emoji=reject_emoji)
-            rejection_count = rejection_reaction.count
-            print(rejection_count)
 
-            if rejection_reaction and rejection_reaction.count >= signatory_threshold:
+            if rejection_reaction and total_rejected >= signatory_threshold:
                 # Define the action to be taken when the reaction threshold is met
                 message.embeds[0].title = "Feedback Submitted (Rejected)"
+                await feedback_data.update(discord_message_id=message.id, rejected=total_rejected + 1)
                 message.embeds[0].set_thumbnail(url='attachment://polkassembly.png')
-                message.embeds[0].set_field_at(index=1, name=reject_emoji, value=rejection_count - 1)
+                message.embeds[0].set_field_at(index=1, name=reject_emoji, value=total_rejected + 1)
+
+                new_value = message.embeds[0].fields[2].value + "\n" + user + " " + reject_emoji
+                message.embeds[0].set_field_at(index=2, name='signatories', value=new_value, inline=False)
+                await message.edit(embed=message.embeds[0])
+                await feedback_data.add_signatory(discord_message_id=message.id, user_id=reaction.member.id,
+                                                  username=reaction.member.name, decision=reject_emoji)
+
                 await message.edit(embed=message.embeds[0])
                 await message.channel.send(
                     f"This message has been rejected {signatory_threshold} {reject_emoji} reactions!")
                 await feedback_data.update(discord_message_id=message.id, status='rejected')  # in-progress
             else:
+
+                await feedback_data.update(discord_message_id=message.id, rejected=total_rejected + 1)
                 message.embeds[0].set_thumbnail(url='attachment://polkassembly.png')
-                message.embeds[0].set_field_at(index=1, name=reject_emoji, value=rejection_count - 1)
+                message.embeds[0].set_field_at(index=1, name=reject_emoji, value=total_rejected + 1)
 
                 new_value = message.embeds[0].fields[2].value + "\n" + user + " " + reject_emoji
                 message.embeds[0].set_field_at(index=2, name='signatories', value=new_value, inline=False)
